@@ -87,7 +87,7 @@ export default function WochenfeedbackDashboard() {
   const [excelRowsPreview, setExcelRowsPreview] = useState([]);
   const [photoModalUrl, setPhotoModalUrl] = useState("");
   const excelTextRef = useRef(null);
-
+const [viewMode, setViewMode] = useState("neu");
   useEffect(() => {
     let active = true;
 
@@ -583,7 +583,7 @@ export default function WochenfeedbackDashboard() {
           })}
         </div>
 
-        {showFeedbackList && displayedUnreadEntries.length > 0 && (
+        {showFeedbackList && (viewMode === "neu" ? displayedUnreadEntries : entries).length > 0 && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-emerald-100">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-bold text-slate-900">
@@ -611,7 +611,7 @@ export default function WochenfeedbackDashboard() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {displayedUnreadEntries.map((entry) => {
+              (viewMode === "neu" ? displayedUnreadEntries : entries).map(...)
                 const freeComment = extractFreeComment(entry.comment || "");
                 const dishes = extractDishes(entry.comment || "");
                 const previewDish = DAYS.map((day) => dishes[day]).find(Boolean);
