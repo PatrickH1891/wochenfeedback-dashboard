@@ -35,25 +35,12 @@ function normalizePhotoPath(photoUrl = "") {
 }
 
 async function openPhoto(photoUrl = "") {
-  if (!photoUrl) return;
-
-  const normalized = normalizePhotoPath(photoUrl);
-
-  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-    window.open(normalized, "_blank", "noopener,noreferrer");
+  if (!photoUrl) {
+    alert("Kein Foto vorhanden.");
     return;
   }
 
-  const { data, error } = await supabase.storage
-    .from("feedback-images")
-    .createSignedUrl(normalized, 60);
-
-  if (error || !data?.signedUrl) {
-    alert("Foto konnte nicht geöffnet werden. Bitte Bucket/Freigabe prüfen.");
-    return;
-  }
-
-  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  window.open(photoUrl, "_blank", "noopener,noreferrer");
 }
 
 function getISOWeek(date = new Date()) {
