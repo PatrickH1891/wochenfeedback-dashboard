@@ -10,18 +10,28 @@ const DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
 
 function normalizePhotoPath(photoUrl = "") {
   if (!photoUrl) return "";
-  if (!photoUrl.startsWith("http://") && !photoUrl.startsWith("https://")) return photoUrl;
+
+  // Falls schon nur der Dateipfad gespeichert ist
+  if (!photoUrl.startsWith("http://") && !photoUrl.startsWith("https://")) {
+    return photoUrl.trim();
+  }
 
   try {
     const url = new URL(photoUrl);
-    const marker = "/feedback-images/";
+
+    // public URL Format:
+    // /storage/v1/object/public/feedback-images/<pfad>
+    const marker = "/storage/v1/object/public/feedback-images/";
     const idx = url.pathname.indexOf(marker);
-    if (idx !== -1) return decodeURIComponent(url.pathname.slice(idx + marker.length));
+
+    if (idx !== -1) {
+      return decodeURIComponent(url.pathname.slice(idx + marker.length)).trim();
+    }
   } catch {
-    return photoUrl;
+    return photoUrl.trim();
   }
 
-  return photoUrl;
+  return photoUrl.trim();
 }
 
 async function openPhoto(photoUrl = "") {
