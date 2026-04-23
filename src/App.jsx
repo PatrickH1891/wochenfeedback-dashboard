@@ -10,37 +10,26 @@ const DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
 
 function normalizePhotoPath(photoUrl = "") {
   if (!photoUrl) return "";
-
-  // Falls schon nur der Dateipfad gespeichert ist
-  if (!photoUrl.startsWith("http://") && !photoUrl.startsWith("https://")) {
-    return photoUrl.trim();
-  }
+  if (!photoUrl.startsWith("http://") && !photoUrl.startsWith("https://")) return photoUrl;
 
   try {
     const url = new URL(photoUrl);
-
-    // public URL Format:
-    // /storage/v1/object/public/feedback-images/<pfad>
-    const marker = "/storage/v1/object/public/feedback-images/";
+    const marker = "/feedback-images/";
     const idx = url.pathname.indexOf(marker);
-
-    if (idx !== -1) {
-      return decodeURIComponent(url.pathname.slice(idx + marker.length)).trim();
-    }
+    if (idx !== -1) return decodeURIComponent(url.pathname.slice(idx + marker.length));
   } catch {
-    return photoUrl.trim();
+    return photoUrl;
   }
 
-  return photoUrl.trim();
+  return photoUrl;
 }
 
 async function openPhoto(photoUrl = "") {
   if (!photoUrl) {
-    alert("Kein Foto vorhanden.");
-    return;
+    return "";
   }
 
-  window.open(photoUrl, "_blank", "noopener,noreferrer");
+  return photoUrl;
 }
 
 function getISOWeek(date = new Date()) {
@@ -96,6 +85,7 @@ export default function WochenfeedbackDashboard() {
   const [csvPreview, setCsvPreview] = useState("");
   const [excelPreview, setExcelPreview] = useState("");
   const [excelRowsPreview, setExcelRowsPreview] = useState([]);
+  const [photoModalUrl, setPhotoModalUrl] = useState("");
   const excelTextRef = useRef(null);
 
   useEffect(() => {
@@ -761,6 +751,27 @@ export default function WochenfeedbackDashboard() {
           </div>
         )}
 
+        {photoModalUrl && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/70 p-4">
+            <div className="relative max-h-[90vh] w-full max-w-5xl rounded-3xl bg-white p-4 shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setPhotoModalUrl("")}
+                className="absolute right-4 top-4 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Schließen
+              </button>
+              <div className="flex max-h-[80vh] items-center justify-center overflow-auto rounded-2xl bg-slate-50 p-4">
+                <img
+                  src={photoModalUrl}
+                  alt="Feedback Foto"
+                  className="max-h-[75vh] w-auto max-w-full rounded-2xl object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {selectedEntry && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
             <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
@@ -805,7 +816,10 @@ export default function WochenfeedbackDashboard() {
                 <div className="mt-4">
                   <button
                     type="button"
-                    onClick={() => openPhoto(selectedEntry.photo_url)}
+                    onClick={async () => {
+                      const url = await openPhoto(selectedEntry.photo_url);
+                      if (url) setPhotoModalUrl(url);
+                    }}
                     className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800"
                   >
                     Foto öffnen
