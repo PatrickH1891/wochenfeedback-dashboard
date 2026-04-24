@@ -8,30 +8,6 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
 
-function normalizePhotoPath(photoUrl = "") {
-  if (!photoUrl) return "";
-  if (!photoUrl.startsWith("http://") && !photoUrl.startsWith("https://")) return photoUrl;
-
-  try {
-    const url = new URL(photoUrl);
-    const marker = "/feedback-images/";
-    const idx = url.pathname.indexOf(marker);
-    if (idx !== -1) return decodeURIComponent(url.pathname.slice(idx + marker.length));
-  } catch {
-    return photoUrl;
-  }
-
-  return photoUrl;
-}
-
-async function openPhoto(photoUrl = "") {
-  if (!photoUrl) {
-    return "";
-  }
-
-  return photoUrl;
-}
-
 function getISOWeek(date = new Date()) {
   const target = new Date(date.valueOf());
   const dayNr = (date.getDay() + 6) % 7;
@@ -86,8 +62,9 @@ export default function WochenfeedbackDashboard() {
   const [excelPreview, setExcelPreview] = useState("");
   const [excelRowsPreview, setExcelRowsPreview] = useState([]);
   const [photoModalUrl, setPhotoModalUrl] = useState("");
+  const [viewMode, setViewMode] = useState("neu");
   const excelTextRef = useRef(null);
-const [viewMode, setViewMode] = useState("neu");
+
   useEffect(() => {
     let active = true;
 
@@ -99,11 +76,11 @@ const [viewMode, setViewMode] = useState("neu");
 
       if (!active) return;
 
-      const uniqueWeeks = Array.from(new Set((data || []).map((item) => String(item.kw)).filter(Boolean)));
+      const uniqueWeeks = Array.from(
+        new Set((data || []).map((item) => String(item.kw)).filter(Boolean))
+      );
       setArchiveWeeks(uniqueWeeks);
     }
-
-    loadArchiveWeeks();
 
     async function load() {
       setLoading(true);
@@ -127,7 +104,9 @@ const [viewMode, setViewMode] = useState("neu");
       setLoading(false);
     }
 
+    loadArchiveWeeks();
     if (kw) load();
+
     return () => {
       active = false;
     };
@@ -145,10 +124,12 @@ const [viewMode, setViewMode] = useState("neu");
   useEffect(() => {
     const storageKey = `wochenfeedback-seen-${kw}`;
     const raw = window.localStorage.getItem(storageKey);
+
     if (!raw) {
       setSeenIds([]);
       return;
     }
+
     try {
       setSeenIds(JSON.parse(raw));
     } catch {
@@ -174,6 +155,17 @@ const [viewMode, setViewMode] = useState("neu");
     if (!selectedDayFilter) return unreadEntries;
     return unreadEntries.filter((entry) => entry.ratings?.[selectedDayFilter] === "down");
   }, [unreadEntries, selectedDayFilter]);
+
+  const listEntries = useMemo(() => {
+    if (viewMode === "alle") {
+      if (selectedDayFilter) {
+        return filteredEntries.filter((entry) => entry.ratings?.[selectedDayFilter] === "down");
+      }
+      return filteredEntries;
+    }
+
+    return displayedUnreadEntries;
+  }, [viewMode, selectedDayFilter, filteredEntries, displayedUnreadEntries]);
 
   const summary = useMemo(() => {
     const dayStats = Object.fromEntries(DAYS.map((day) => [day, { up: 0, down: 0 }]));
@@ -226,6 +218,7 @@ const [viewMode, setViewMode] = useState("neu");
   const markEntriesAsSeen = (ids) => {
     const uniqueNewIds = ids.filter((id) => !seenIds.includes(id));
     if (uniqueNewIds.length === 0) return;
+
     const updated = [...uniqueNewIds, ...seenIds];
     setSeenIds(updated);
     window.localStorage.setItem(`wochenfeedback-seen-${kw}`, JSON.stringify(updated));
@@ -239,7 +232,14 @@ const [viewMode, setViewMode] = useState("neu");
   const toggleUnreadList = () => {
     if (unreadEntries.length === 0) return;
     setSelectedDayFilter(null);
+    setViewMode("neu");
     setShowFeedbackList((prev) => !prev);
+  };
+
+  const openAllWeekEntries = () => {
+    setSelectedDayFilter(null);
+    setViewMode("alle");
+    setShowFeedbackList(true);
   };
 
   const openDayNegatives = (day) => {
@@ -250,7 +250,21 @@ const [viewMode, setViewMode] = useState("neu");
     if (unreadNegativeIds.length === 0) return;
 
     setSelectedDayFilter(day);
+    setViewMode("neu");
     setShowFeedbackList(true);
+  };
+
+  const closeFeedbackList = () => {
+    if (selectedDayFilter && viewMode === "neu") {
+      const idsToMark = unreadEntries
+        .filter((entry) => entry.ratings?.[selectedDayFilter] === "down")
+        .map((entry) => entry.id);
+      markEntriesAsSeen(idsToMark);
+    }
+
+    setShowFeedbackList(false);
+    setSelectedDayFilter(null);
+    setViewMode("neu");
   };
 
   const buildCsv = () => {
@@ -365,27 +379,16 @@ const [viewMode, setViewMode] = useState("neu");
   };
 
   const downloadCsv = () => {
-    alert("Direkter Download wird in dieser Vorschau blockiert. Bitte 'Excel-Inhalt kopieren' nutzen.");
-  };
-
-  const copyCsv = async () => {
-    try {
-      await navigator.clipboard.writeText(csvPreview || buildCsv());
-      alert("CSV in Zwischenablage kopiert");
-    } catch {
-      alert("Kopieren hat nicht funktioniert");
-    }
+    alert("Direkter Download wird in dieser Umgebung oft blockiert. Bitte 'In Excel kopieren' oder 'Excel-Text markieren' nutzen.");
   };
 
   const copyExcel = async () => {
     const text = excelPreview || buildExcelText();
 
     try {
-      // moderner Weg
       await navigator.clipboard.writeText(text);
       alert("Für Excel kopiert. Jetzt Excel öffnen, Zelle A1 anklicken und STRG+V drücken.");
-    } catch (err) {
-      // Fallback für blockierte Clipboard APIs
+    } catch {
       try {
         const textarea = document.createElement("textarea");
         textarea.value = text;
@@ -394,25 +397,13 @@ const [viewMode, setViewMode] = useState("neu");
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
-
         document.execCommand("copy");
         document.body.removeChild(textarea);
-
-        alert("Für Excel kopiert (Fallback). Jetzt Excel öffnen und STRG+V drücken.");
+        alert("Für Excel kopiert. Jetzt Excel öffnen und STRG+V drücken.");
       } catch {
         alert("Kopieren wurde vom Browser blockiert. Bitte manuell markieren und kopieren.");
       }
     }
-  };
-
-  const exportToCsv = () => {
-    if (filteredEntries.length === 0) {
-      alert("Keine Daten zum Exportieren vorhanden");
-      return;
-    }
-    setCsvPreview(buildCsv());
-    setExcelPreview(buildExcelText());
-    setExcelRowsPreview(buildExcelRows());
   };
 
   const selectExcelText = () => {
@@ -420,6 +411,17 @@ const [viewMode, setViewMode] = useState("neu");
     excelTextRef.current.focus();
     excelTextRef.current.select();
     alert("Excel-Text ist markiert. Jetzt STRG+C drücken und dann in Excel in A1 einfügen.");
+  };
+
+  const exportToCsv = () => {
+    if (filteredEntries.length === 0) {
+      alert("Keine Daten zum Exportieren vorhanden");
+      return;
+    }
+
+    setCsvPreview(buildCsv());
+    setExcelPreview(buildExcelText());
+    setExcelRowsPreview(buildExcelRows());
   };
 
   return (
@@ -483,19 +485,21 @@ const [viewMode, setViewMode] = useState("neu");
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium text-slate-500">Archiv</span>
 
-            {/* letzte 5 Wochen als Buttons */}
             {archiveWeeks.slice(0, 5).map((week) => (
               <button
                 key={week}
                 type="button"
                 onClick={() => setKw(String(week))}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition ${String(kw) === String(week) ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+                  String(kw) === String(week)
+                    ? "bg-emerald-600 text-white"
+                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                }`}
               >
                 KW {week}
               </button>
             ))}
 
-            {/* Dropdown für alle weiteren */}
             {archiveWeeks.length > 5 && (
               <select
                 onChange={(e) => setKw(e.target.value)}
@@ -514,11 +518,7 @@ const [viewMode, setViewMode] = useState("neu");
         </div>
 
         <div className="grid gap-4 md:grid-cols-5">
-          <button
-            type="button"
-            onClick={toggleUnreadList}
-            className="rounded-3xl bg-white p-5 text-left shadow-sm ring-1 ring-emerald-100 transition hover:bg-emerald-50"
-          >
+          <div className="rounded-3xl bg-white p-5 text-left shadow-sm ring-1 ring-emerald-100">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm text-slate-500">Rückmeldungen</div>
               {unreadEntries.length > 0 && (
@@ -527,11 +527,35 @@ const [viewMode, setViewMode] = useState("neu");
                 </div>
               )}
             </div>
+
             <div className="mt-2 text-3xl font-bold text-slate-900">{filteredEntries.length}</div>
-            <div className="mt-3 text-sm font-medium text-emerald-700">
-              {showFeedbackList && !selectedDayFilter ? "Neue Rückmeldungen ausblenden" : "Neue Rückmeldungen anzeigen"}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={toggleUnreadList}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                  viewMode === "neu" && showFeedbackList
+                    ? "bg-emerald-600 text-white"
+                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                }`}
+              >
+                Neue Rückmeldungen
+              </button>
+
+              <button
+                type="button"
+                onClick={openAllWeekEntries}
+                className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                  viewMode === "alle" && showFeedbackList
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                Alle Rückmeldungen KW {kw}
+              </button>
             </div>
-          </button>
+          </div>
 
           <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-emerald-100">
             <div className="text-sm text-slate-500">Gesamt 👍</div>
@@ -565,7 +589,11 @@ const [viewMode, setViewMode] = useState("neu");
                 key={day}
                 type="button"
                 onClick={() => openDayNegatives(day)}
-                className={`rounded-3xl p-5 text-left shadow-sm ring-1 transition ${isAlert ? "bg-red-100 ring-red-200 hover:bg-red-200" : "bg-white ring-emerald-100"}`}
+                className={`rounded-3xl p-5 text-left shadow-sm ring-1 transition ${
+                  isAlert
+                    ? "bg-red-100 ring-red-200 hover:bg-red-200"
+                    : "bg-white ring-emerald-100"
+                }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm text-slate-500">{day}</div>
@@ -583,26 +611,26 @@ const [viewMode, setViewMode] = useState("neu");
           })}
         </div>
 
-        {showFeedbackList && (viewMode === "neu" ? displayedUnreadEntries : entries).length > 0 && (
+        {showFeedbackList && listEntries.length > 0 && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-emerald-100">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-bold text-slate-900">
-                {selectedDayFilter ? `Neue Negativmeldungen: ${selectedDayFilter}` : "Neue Rückmeldungen"}
+                {selectedDayFilter
+                  ? viewMode === "alle"
+                    ? `Alle Negativmeldungen: ${selectedDayFilter}`
+                    : `Neue Negativmeldungen: ${selectedDayFilter}`
+                  : viewMode === "alle"
+                    ? `Alle Rückmeldungen KW ${kw}`
+                    : "Neue Rückmeldungen"}
               </h2>
+
               <div className="flex items-center gap-3">
-                <div className="text-sm text-slate-500">{displayedUnreadEntries.length} ungelesen</div>
+                <div className="text-sm text-slate-500">
+                  {viewMode === "neu" ? `${listEntries.length} ungelesen` : `${listEntries.length} Einträge`}
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (selectedDayFilter) {
-                      const idsToMark = unreadEntries
-                        .filter((entry) => entry.ratings?.[selectedDayFilter] === "down")
-                        .map((entry) => entry.id);
-                      markEntriesAsSeen(idsToMark);
-                    }
-                    setShowFeedbackList(false);
-                    setSelectedDayFilter(null);
-                  }}
+                  onClick={closeFeedbackList}
                   className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 >
                   Schließen
@@ -611,24 +639,33 @@ const [viewMode, setViewMode] = useState("neu");
             </div>
 
             <div className="mt-4 space-y-3">
-              (viewMode === "neu" ? displayedUnreadEntries : entries).map(...)
+              {listEntries.map((entry) => {
                 const freeComment = extractFreeComment(entry.comment || "");
                 const dishes = extractDishes(entry.comment || "");
                 const previewDish = DAYS.map((day) => dishes[day]).find(Boolean);
+                const isUnread = !seenIds.includes(entry.id);
 
                 return (
-                  <div key={entry.id} className="rounded-2xl border border-emerald-100 bg-slate-50 px-4 py-4">
+                  <div
+                    key={entry.id}
+                    className={`rounded-2xl border border-emerald-100 bg-slate-50 px-4 py-4 ${
+                      !isUnread && viewMode === "alle" ? "opacity-80" : ""
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-slate-900">{entry.kita_name || "Ohne Name"}</span>
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">KW {entry.kw}</span>
-                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">Neu</span>
+                          {isUnread && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">Neu</span>
+                          )}
                         </div>
                         <div className="mt-1 truncate text-sm text-slate-500">
                           {freeComment || previewDish || "Öffnen für Details"}
                         </div>
                       </div>
+
                       <button
                         type="button"
                         onClick={() => openEntry(entry)}
@@ -761,6 +798,7 @@ const [viewMode, setViewMode] = useState("neu");
               >
                 Schließen
               </button>
+
               <div className="flex max-h-[80vh] items-center justify-center overflow-auto rounded-2xl bg-slate-50 p-4">
                 <img
                   src={photoModalUrl}
@@ -816,10 +854,7 @@ const [viewMode, setViewMode] = useState("neu");
                 <div className="mt-4">
                   <button
                     type="button"
-                    onClick={async () => {
-                      const url = await openPhoto(selectedEntry.photo_url);
-                      if (url) setPhotoModalUrl(url);
-                    }}
+                    onClick={() => setPhotoModalUrl(selectedEntry.photo_url)}
                     className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800"
                   >
                     Foto öffnen
